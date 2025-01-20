@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import FastifyVite from "@fastify/vite";
 import fastifyEnv from "@fastify/env";
+import ttsRoutes from "./server/routes/tts.js";
 
 // Fastify + React + Vite configuration
 const server = Fastify({
@@ -51,5 +52,7 @@ server.get("/token", async () => {
     },
   });
 });
+
+await server.register(ttsRoutes);
 
 await server.listen({ port: process.env.PORT || 3000 });

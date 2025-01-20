@@ -12,4 +12,29 @@ export default {
   ssr: {
     external: ["use-sync-external-store"],
   },
+  optimizeDeps: {
+    include: [
+      "@picovoice/porcupine-web-de-worker",
+      "@picovoice/web-voice-processor",
+    ],
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          porcupine: ["@picovoice/porcupine-web-de-worker"],
+          voiceProcessor: ["@picovoice/web-voice-processor"],
+        },
+      },
+    },
+  },
+  worker: {
+    format: "es",
+    plugins: () => [],
+  },
+  resolve: {
+    alias: {
+      "@picovoice": join(dirname(path), "node_modules/@picovoice"),
+    },
+  },
 };

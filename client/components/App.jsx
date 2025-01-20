@@ -3,6 +3,8 @@ import logo from "/assets/openai-logomark.svg";
 import EventLog from "./EventLog";
 import SessionControls from "./SessionControls";
 import ToolPanel from "./ToolPanel";
+import { voiceService } from "../services/voiceService.js";
+import { sessionManager } from "../services/sessionManager";
 
 export default function App() {
   const [isSessionActive, setIsSessionActive] = useState(false);
@@ -122,6 +124,46 @@ export default function App() {
       });
     }
   }, [dataChannel]);
+
+  useEffect(() => {
+    const initializeWakeWord = async () => {
+      if (!voiceService) return;
+
+      try {
+        await voiceService.initialize(import.meta.env.VITE_PICOVOICE_API_KEY);
+
+        voiceService.startListening(
+          // Wake word detected - start session
+          async () => {
+            console.log("wake word detected");
+            if (!isSessionActive) {
+              try {
+                console.log("starting session");
+                await startSession();
+              } catch (error) {
+                console.error("Failed to start session:", error);
+              }
+            }
+          },
+          // Stop command detected - end session
+          () => {
+            console.log("stop command detected");
+            if (isSessionActive) {
+              stopSession();
+            }
+          },
+        );
+      } catch (error) {
+        console.error("Failed to initialize wake word detection:", error);
+      }
+    };
+
+    initializeWakeWord();
+
+    return () => {
+      voiceService?.cleanup();
+    };
+  }, [isSessionActive]);
 
   return (
     <>
