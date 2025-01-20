@@ -109,22 +109,61 @@ export default function App() {
     sendClientEvent({ type: "response.create" });
   }
 
-  // Attach event listeners to the data channel when a new one is created
+  // Modify the data channel effect
   useEffect(() => {
     if (dataChannel) {
-      // Append new server events to the list
-      dataChannel.addEventListener("message", (e) => {
-        setEvents((prev) => [JSON.parse(e.data), ...prev]);
-      });
+      const handleMessage = (e) => {
+        const event = JSON.parse(e.data);
+        console.log("Data channel message received:", event);
+
+        // Update events list first
+        setEvents((prev) => [event, ...prev]);
+
+        // Start timer after session is created
+        if (event.type === "session.created") {
+          console.log("Session created, starting initial idle timer");
+          voiceService?.startIdleTimer();
+        }
+
+        // Start timer after response is complete
+        if (event.type === "response.done") {
+          console.log("Response complete, starting idle timer");
+          voiceService?.startIdleTimer();
+        }
+
+        // Reset timer when user starts speaking
+        if (event.type === "input_audio_buffer.speech_started") {
+          console.log("User started speaking, resetting idle timer");
+          voiceService?.resetIdleTimer();
+        }
+
+        // Reset timer when assistant starts speaking
+        if (
+          event.type === "response.output_item.added" &&
+          event.item?.type === "speech"
+        ) {
+          console.log("Assistant started speaking, resetting idle timer");
+          voiceService?.resetIdleTimer();
+        }
+      };
 
       // Set session active when the data channel is opened
       dataChannel.addEventListener("open", () => {
+        console.log("Data channel opened, session becoming active");
         setIsSessionActive(true);
         setEvents([]);
       });
+
+      dataChannel.addEventListener("message", handleMessage);
+
+      return () => {
+        console.log("Cleaning up data channel listeners");
+        dataChannel.removeEventListener("message", handleMessage);
+      };
     }
   }, [dataChannel]);
 
+  // Remove the idle timer start from the wake word callback
   useEffect(() => {
     const initializeWakeWord = async () => {
       if (!voiceService) return;
@@ -135,11 +174,13 @@ export default function App() {
         voiceService.startListening(
           // Wake word detected - start session
           async () => {
-            console.log("wake word detected");
+            console.log("Wake word detected");
             if (!isSessionActive) {
               try {
-                console.log("starting session");
+                console.log("Starting session");
                 await startSession();
+                console.log("Session started successfully");
+                // Removed idle timer start from here
               } catch (error) {
                 console.error("Failed to start session:", error);
               }
@@ -147,7 +188,15 @@ export default function App() {
           },
           // Stop command detected - end session
           () => {
-            console.log("stop command detected");
+            console.log("Stop command detected");
+            if (isSessionActive) {
+              voiceService.clearIdleTimer();
+              stopSession();
+            }
+          },
+          // Idle timeout - end session
+          () => {
+            console.log("Idle timeout callback triggered");
             if (isSessionActive) {
               stopSession();
             }

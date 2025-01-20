@@ -7,7 +7,10 @@ class VoiceService {
     this.isListening = false;
     this.onWakeWord = null;
     this.onStopCommand = null;
+    this.onIdleTimeout = null;
     this.audioContext = null;
+    this.idleTimer = null;
+    this.IDLE_TIMEOUT = 30000;
   }
 
   async initializeAudioContext() {
@@ -35,8 +38,7 @@ class VoiceService {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          input:
-            "Hey Woiferl, was für ein schöner Tag, wie kann ich dir heute behilflich sein?",
+          input: "Hey Woiferl, wie kann ich helfen?",
           voice: "onyx",
           model: "tts-1",
         }),
@@ -166,18 +168,60 @@ class VoiceService {
     }
   }
 
-  startListening(onWakeWord, onStopCommand) {
+  startIdleTimer() {
+    console.log("Starting idle timer (10 seconds)");
+    this.clearIdleTimer();
+
+    this.idleTimer = setTimeout(() => {
+      console.log("Idle timeout triggered - no activity for 10 seconds");
+      if (this.onIdleTimeout) {
+        // First stop the session
+        console.log("Executing idle timeout callback");
+        this.onIdleTimeout();
+
+        // Then play goodbye
+        console.log("Playing goodbye message due to idle timeout");
+        this.playGoodbyeResponse().then(() => {
+          console.log(
+            "Resubscribing to wake word detection after idle timeout",
+          );
+          WebVoiceProcessor.subscribe(this.porcupine);
+        });
+      }
+    }, this.IDLE_TIMEOUT);
+  }
+
+  clearIdleTimer() {
+    if (this.idleTimer) {
+      console.log("Clearing existing idle timer");
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
+  }
+
+  resetIdleTimer() {
+    console.log("Resetting idle timer due to activity");
+    this.startIdleTimer();
+  }
+
+  startListening(onWakeWord, onStopCommand, onIdleTimeout) {
+    console.log("Starting listening with all callbacks");
     this.onWakeWord = onWakeWord;
     this.onStopCommand = onStopCommand;
+    this.onIdleTimeout = onIdleTimeout;
   }
 
   stopListening() {
+    console.log("Stopping listening and clearing all callbacks");
     if (!this.isListening) return;
     this.onWakeWord = null;
     this.onStopCommand = null;
+    this.onIdleTimeout = null;
+    this.clearIdleTimer();
   }
 
   async cleanup() {
+    console.log("Cleaning up voice service");
     this.stopListening();
     if (this.porcupine) {
       await WebVoiceProcessor.unsubscribe(this.porcupine);
